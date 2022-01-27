@@ -9,6 +9,8 @@ import (
 	"gopkg.in/yaml.v2"
 )
 
+// TODO: move all local functions to custom types for better debugging and capabilities
+
 // ymlErrorString formats yml as an error string.
 func ymlErrorString(yml interface{}) string {
 	str, err := yaml.Marshal(yml)
@@ -83,7 +85,7 @@ func compileSlice(yml []interface{}) (Fn, string) {
 	return Fn(func() interface{} {
 		var ret []interface{}
 		for _, fn := range subfns {
-			ret = append(ret, fn)
+			ret = append(ret, fn())
 		}
 		return ret
 	}), ""
@@ -256,9 +258,10 @@ func compileDo(yml interface{}) (Fn, string) {
 	}
 
 	return Fn(func() interface{} {
-		inputs, err := parseInput(on())
+		val := on()
+		inputs, err := parseInput(val)
 		if err != nil {
-			panic("bad value for on")
+			panic(fmt.Sprintf("bad value for on: %v", val))
 		}
 
 		for i := range inputs {
@@ -289,9 +292,10 @@ func compilePress(yml interface{}) (Fn, string) {
 		return nil, err
 	}
 	return Fn(func() interface{} {
-		inputs, err := parseInput(fn())
+		val := fn()
+		inputs, err := parseInput(val)
 		if err != nil {
-			panic("bad value for press")
+			panic(fmt.Sprintf("bad value for press: %v", val))
 		}
 
 		for _, input := range inputs {
@@ -317,9 +321,10 @@ func compileHold(yml interface{}) (Fn, string) {
 		return nil, err
 	}
 	return Fn(func() interface{} {
-		inputs, err := parseInput(fn())
+		val := fn()
+		inputs, err := parseInput(val)
 		if err != nil {
-			panic("bad value for press")
+			panic(fmt.Sprintf("bad value for hold: %v", val))
 		}
 		for _, input := range inputs {
 			autokey.Send(input)
