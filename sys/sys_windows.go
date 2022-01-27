@@ -14,12 +14,39 @@ const (
 	// These constants are mapped to their corresponding C constants internally.
 	// The constant for the messages and event functions are _not_ the same,
 	// so some mapping has to happen regardless.
-	KeyDown = iota
+	KeyDown = iota + 1
 	KeyUp
 	LeftMouseDown
 	LeftMouseUp
 	RightMouseDown
 	RightMouseUp
+)
+
+const (
+	F1  = int(C.VK_F1)
+	F2  = int(C.VK_F2)
+	F3  = int(C.VK_F3)
+	F4  = int(C.VK_F4)
+	F5  = int(C.VK_F5)
+	F6  = int(C.VK_F6)
+	F7  = int(C.VK_F7)
+	F8  = int(C.VK_F8)
+	F9  = int(C.VK_F9)
+	F10 = int(C.VK_F10)
+	F11 = int(C.VK_F11)
+	F12 = int(C.VK_F12)
+	F13 = int(C.VK_F13)
+	F14 = int(C.VK_F14)
+	F15 = int(C.VK_F15)
+	F16 = int(C.VK_F16)
+	F17 = int(C.VK_F17)
+	F18 = int(C.VK_F18)
+	F19 = int(C.VK_F19)
+	F20 = int(C.VK_F20)
+	F21 = int(C.VK_F21)
+	F22 = int(C.VK_F22)
+	F23 = int(C.VK_F23)
+	F24 = int(C.VK_F24)
 )
 
 var (

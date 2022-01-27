@@ -16,6 +16,21 @@ const (
 	RightMouseUp   = sys.RightMouseUp
 )
 
+const (
+	F1  = sys.F1
+	F2  = sys.F2
+	F3  = sys.F3
+	F4  = sys.F4
+	F5  = sys.F5
+	F6  = sys.F6
+	F7  = sys.F7
+	F8  = sys.F8
+	F9  = sys.F9
+	F10 = sys.F10
+	F11 = sys.F11
+	F12 = sys.F12
+)
+
 var (
 	im = newinputMonitor()
 

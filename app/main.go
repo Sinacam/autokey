@@ -15,14 +15,25 @@ func main() {
 		fmt.Println(err)
 		return
 	}
-	var m interface{}
-	err = yaml.NewDecoder(f).Decode(&m)
+
+	var yml interface{}
+	err = yaml.NewDecoder(f).Decode(&yml)
 	if err != nil {
 		fmt.Println(err)
 		return
 	}
 
-	fmt.Printf("%T\n", m)
+	fn, err := Compile(yml)
+	if err != nil {
+		fmt.Println(err)
+		return
+	}
+
+	autokey.Init()
+	defer autokey.Teardown()
+	fmt.Println("Installed")
+	fn()
+	time.Sleep(5 * time.Second)
 }
 
 func test() {
