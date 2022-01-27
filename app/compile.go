@@ -264,6 +264,7 @@ func compileDo(yml interface{}) (Fn, string) {
 			panic(fmt.Sprintf("bad value for on: %v", val))
 		}
 
+		// on assumes keydown by default
 		for i := range inputs {
 			if inputs[i].Flag == 0 {
 				inputs[i].Flag = autokey.KeyDown
@@ -283,7 +284,7 @@ func compileDo(yml interface{}) (Fn, string) {
 }
 
 func compileRepeat(yml interface{}) (Fn, string) {
-	return nil, ymlErrorString(yml)
+	return nil, "repeat unimplemented"
 }
 
 func compilePress(yml interface{}) (Fn, string) {
@@ -298,16 +299,25 @@ func compilePress(yml interface{}) (Fn, string) {
 			panic(fmt.Sprintf("bad value for press: %v", val))
 		}
 
+		// Specifying nothing means keydown and keyup for press.
+		// Mouse down always mean mouse down + mouse up.
+		// TODO: homogenize mouse and key. This is a leaky abstraction.
+		// Order is keydown over all inputs before keyup to allow
+		// key combinations such as ctrl + c.
 		for _, input := range inputs {
 			if input.Flag == 0 {
 				input.Flag = autokey.KeyDown
 			}
 			autokey.Send(input)
 		}
+
 		for _, input := range inputs {
-			if input.Flag == 0 || input.Flag == autokey.KeyDown {
+			switch input.Flag {
+			case 0:
 				input.Flag = autokey.KeyUp
 				autokey.Send(input)
+			case autokey.LeftMouseDown:
+				autokey.Send(autokey.Input{Flag: autokey.LeftMouseUp})
 			}
 		}
 
