@@ -2,12 +2,30 @@ package main
 
 import (
 	"fmt"
+	"os"
 	"time"
 
 	"github.com/Sinacam/autokey"
+	"gopkg.in/yaml.v2"
 )
 
 func main() {
+	f, err := os.Open("short.yml")
+	if err != nil {
+		fmt.Println(err)
+		return
+	}
+	var m interface{}
+	err = yaml.NewDecoder(f).Decode(&m)
+	if err != nil {
+		fmt.Println(err)
+		return
+	}
+
+	fmt.Printf("%T\n", m)
+}
+
+func test() {
 	autokey.Init()
 	defer autokey.Teardown()
 
@@ -25,8 +43,4 @@ func main() {
 
 	time.Sleep(5 * time.Second)
 	fmt.Println("\nUninstalled")
-}
-
-func BuildEvent() {
-
 }
