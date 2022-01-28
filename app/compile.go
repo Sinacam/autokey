@@ -3,7 +3,9 @@ package main
 import (
 	"errors"
 	"fmt"
+	"strconv"
 	"strings"
+	"time"
 
 	"github.com/Sinacam/autokey"
 	"gopkg.in/yaml.v2"
@@ -217,7 +219,7 @@ func compileDo(yml interface{}) (Fn, string) {
 		return nil, "value must be a map"
 	}
 
-	var on Fn
+	var onFn Fn
 	remaining := make(map[interface{}]interface{})
 	for k, v := range m {
 		var kstr string
@@ -241,7 +243,7 @@ func compileDo(yml interface{}) (Fn, string) {
 			if err != "" {
 				return nil, addErrorTrace(err, kstr)
 			}
-			on = fn
+			onFn = fn
 		default:
 			remaining[k] = v
 		}
@@ -253,12 +255,12 @@ func compileDo(yml interface{}) (Fn, string) {
 	}
 
 	// If there is no trigger, do is a no-op.
-	if on == nil {
+	if onFn == nil {
 		return remainingFn, ""
 	}
 
 	return Fn(func() interface{} {
-		val := on()
+		val := onFn()
 		inputs, err := parseInput(val)
 		if err != nil {
 			panic(fmt.Sprintf("bad value for on: %v", val))
@@ -283,8 +285,117 @@ func compileDo(yml interface{}) (Fn, string) {
 	}), ""
 }
 
+func parseFreq(yml interface{}) (float64, error) {
+	s, ok := yml.(string)
+	if !ok {
+		return 0, errors.New("cannot parse as frequency")
+	}
+
+	s = strings.ToLower(s)
+	if !strings.HasSuffix(s, "hz") {
+		return 0, errors.New("cannot parse as frequency")
+	}
+
+	freq, err := strconv.ParseFloat(s[:len(s)-2], 64)
+	if err != nil {
+		return 0, err
+	}
+	return freq, nil
+}
+
+func parseDuration(yml interface{}) (time.Duration, error) {
+	s, ok := yml.(string)
+	if !ok {
+		return 0, errors.New("cannot parse as duration")
+	}
+
+	return time.ParseDuration(s)
+}
+
 func compileRepeat(yml interface{}) (Fn, string) {
-	return nil, "repeat unimplemented"
+	m, ok := yml.(map[interface{}]interface{})
+	if !ok {
+		return nil, "value must be a map"
+	}
+
+	var (
+		atFn    Fn
+		forFn   Fn
+		untilFn Fn
+	)
+	remaining := make(map[interface{}]interface{})
+	for k, v := range m {
+		kstr, ok := k.(string)
+		if !ok {
+			return nil, "key must be a string"
+		}
+
+		switch kstr {
+		case "at":
+			fn, err := compile(v)
+			if err != "" {
+				return nil, addErrorTrace(err, kstr)
+			}
+			atFn = fn
+		case "for":
+			fn, err := compile(v)
+			if err != "" {
+				return nil, addErrorTrace(err, kstr)
+			}
+			forFn = fn
+		case "until":
+			fn, err := compile(v)
+			if err != "" {
+				return nil, addErrorTrace(err, kstr)
+			}
+			untilFn = fn
+		default:
+			remaining[k] = v
+		}
+	}
+
+	if atFn == nil {
+		return nil, "missing at"
+	}
+
+	remainingFn, err := compileMap(remaining)
+	if err != "" {
+		return nil, err
+	}
+
+	switch {
+	case forFn != nil:
+		return Fn(func() interface{} {
+			// TODO: check how do-on interacts with this blocking
+			atVal := atFn()
+			freq, err := parseFreq(atVal)
+			if err != nil {
+				panic(fmt.Sprintf("bad value for at: %v", atVal))
+			}
+
+			forVal := forFn()
+			dur, err := parseDuration(forVal)
+			if err != nil {
+				panic(fmt.Sprintf("bad value for for: %v", forVal))
+			}
+
+			ticker := time.NewTicker(time.Duration(float64(time.Second) / freq))
+			defer ticker.Stop()
+			timer := time.NewTimer(dur)
+			for {
+				select {
+				case <-timer.C:
+					return nil
+				case <-ticker.C:
+					remainingFn()
+				}
+			}
+		}), ""
+	case untilFn != nil:
+		return nil, "until not implemented"
+	default:
+		return nil, "missing for or until"
+	}
 }
 
 func compilePress(yml interface{}) (Fn, string) {
