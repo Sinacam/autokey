@@ -106,14 +106,16 @@ func compile(yml interface{}) (Expr, string) {
 type sliceExpr struct {
 	subs       []Expr
 	staticSubs []interface{}
+	static     bool
 }
 
 func newSliceExpr(subs []Expr) *sliceExpr {
-	se := sliceExpr{}
 	static := true
-	for _, v := range se.subs {
+	for _, v := range subs {
 		static = static && v.Static()
 	}
+
+	se := sliceExpr{static: static}
 	if static {
 		for _, v := range se.subs {
 			se.staticSubs = append(se.staticSubs, v.Eval())
@@ -137,7 +139,7 @@ func (se *sliceExpr) Eval() interface{} {
 }
 
 func (se *sliceExpr) Static() bool {
-	return se.staticSubs != nil
+	return se.static
 }
 
 func compileSlice(yml []interface{}) (Expr, string) {
