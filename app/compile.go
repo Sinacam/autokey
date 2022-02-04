@@ -28,8 +28,8 @@ func addErrorTrace(err string, from interface{}) string {
 }
 
 type Expr interface {
-	Eval() interface{}
-	Static() bool
+	Eval() interface{} // Evaluate the expression value and its side-effect
+	Static() bool      // Returns true if the expression has no side-effect
 }
 
 // Compiles yml as a Expr recursively.
@@ -104,25 +104,26 @@ func compile(yml interface{}) (Expr, string) {
 }
 
 type sliceExpr struct {
-	subs      []Expr
-	staticVal []interface{}
+	subs       []Expr
+	staticSubs []interface{}
 }
 
-func newSliceExpr(subs []Expr) sliceExpr {
+func newSliceExpr(subs []Expr) *sliceExpr {
 	se := sliceExpr{subs: subs}
 	static := true
 	for _, v := range se.subs {
 		static = static && v.Static()
 	}
 	if static {
-		se.staticVal = se.Eval().([]interface{})
+		se.staticSubs = se.Eval().([]interface{})
+		se.subs = nil
 	}
-	return se
+	return &se
 }
 
-func (se sliceExpr) Eval() interface{} {
+func (se *sliceExpr) Eval() interface{} {
 	if se.Static() {
-		return se.staticVal
+		return se.staticSubs
 	}
 
 	var ret []interface{}
@@ -132,8 +133,8 @@ func (se sliceExpr) Eval() interface{} {
 	return ret
 }
 
-func (se sliceExpr) Static() bool {
-	return se.staticVal != nil
+func (se *sliceExpr) Static() bool {
+	return se.staticSubs != nil
 }
 
 func compileSlice(yml []interface{}) (Expr, string) {
@@ -265,17 +266,40 @@ func parseInput(val interface{}) ([]autokey.Input, error) {
 type doExpr struct {
 	onExpr     Expr
 	actionExpr Expr
+	staticOn   []autokey.Input
 }
 
-func (de doExpr) Eval() interface{} {
-	// If there is no trigger, do is a no-op.
-	if de.onExpr == nil {
-		de.actionExpr.Eval()
+func newDoExpr(onExpr, actionExpr Expr) (*doExpr, string) {
+	de := &doExpr{actionExpr: actionExpr}
+	if onExpr.Static() {
+		val := onExpr.Eval()
+		inputs, err := parseInput(val)
+		if err != nil {
+			return nil, err.Error()
+		}
+		de.staticOn = inputs
+	} else {
+		de.onExpr = onExpr
+	}
+	return de, ""
+}
+
+func (de *doExpr) Eval() interface{} {
+	if de.Static() {
+		return nil
 	}
 
-	return Fn(func() interface{} {
-		val := onExpr()
-		inputs, err := parseInput(val)
+	// If there is no trigger, do is identity.
+	if de.onExpr == nil && de.staticOn == nil {
+		de.actionExpr.Eval()
+		return nil
+	}
+
+	var err error
+	inputs := de.staticOn
+	if inputs == nil {
+		val := de.onExpr.Eval()
+		inputs, err = parseInput(val)
 		if err != nil {
 			panic(fmt.Sprintf("bad value for on: %v", val))
 		}
@@ -286,17 +310,21 @@ func (de doExpr) Eval() interface{} {
 				inputs[i].Flag = autokey.KeyDown
 			}
 		}
+	}
 
-		ch := make(chan autokey.Input)
-		autokey.NotifyOn(ch, inputs...)
-		go func() {
-			for range ch {
-				remainingFn()
-			}
-		}()
+	ch := make(chan autokey.Input)
+	autokey.NotifyOn(ch, inputs...)
+	go func() {
+		for range ch {
+			de.actionExpr.Eval()
+		}
+	}()
 
-		return nil
-	}), ""
+	return nil
+}
+
+func (de *doExpr) Static() bool {
+	return de.actionExpr.Static()
 }
 
 // compileDo compiles the map value with key "do".
@@ -328,24 +356,31 @@ func compileDo(yml interface{}) (Expr, string) {
 
 		switch kstr {
 		case "on":
-			fn, err := compile(v)
+			expr, err := compile(v)
 			if err != "" {
 				return nil, addErrorTrace(err, kstr)
 			}
-			onExpr = fn
+			onExpr = expr
 		default:
 			remaining[k] = v
 		}
 	}
 
-	remainingFn, err := compileMap(remaining)
+	actionExpr, err := compileMap(remaining)
 	if err != "" {
 		return nil, err
 	}
 
+	de, err := newDoExpr(onExpr, actionExpr)
+	if err != "" {
+		return nil, addErrorTrace(err, "on")
+	}
+	return de, ""
 }
 
-func parseFreq(yml interface{}) (float64, error) {
+type hertz float64
+
+func parseFreq(yml interface{}) (hertz, error) {
 	s, ok := yml.(string)
 	if !ok {
 		return 0, errors.New("cannot parse as frequency")
@@ -360,7 +395,7 @@ func parseFreq(yml interface{}) (float64, error) {
 	if err != nil {
 		return 0, err
 	}
-	return freq, nil
+	return hertz(freq), nil
 }
 
 func parseDuration(yml interface{}) (time.Duration, error) {
@@ -372,16 +407,60 @@ func parseDuration(yml interface{}) (time.Duration, error) {
 	return time.ParseDuration(s)
 }
 
-func compileRepeat(yml interface{}) (Fn, string) {
+type repeatExpr struct {
+	atExpr     Expr
+	forExpr    Expr
+	untilExpr  Expr
+	actionExpr Expr
+	staticAt   hertz
+	staticFor  time.Duration
+}
+
+func newRepeatExpr(atExpr, forExpr, untilExpr, actionExpr Expr) (*repeatExpr, string) {
+	re := &repeatExpr{
+		untilExpr:  untilExpr,
+		actionExpr: actionExpr,
+	}
+
+	if atExpr.Static() {
+		val := atExpr.Eval()
+		freq, err := parseFreq(val)
+		if err != nil {
+			return nil, err.Error()
+		}
+		re.staticAt = freq
+	} else {
+		re.atExpr = atExpr
+	}
+
+	if forExpr != nil && forExpr.Static() {
+		val := forExpr.Eval()
+		dur, err := parseDuration(val)
+		if err != nil {
+			return nil, err.Error()
+		}
+		re.staticFor = dur
+	} else {
+		re.forExpr = forExpr
+	}
+
+	return re, ""
+}
+
+func (re *repeatExpr) Eval() interface{} {
+	return nil
+}
+
+func compileRepeat(yml interface{}) (Expr, string) {
 	m, ok := yml.(map[interface{}]interface{})
 	if !ok {
 		return nil, "value must be a map"
 	}
 
 	var (
-		atFn    Fn
-		forFn   Fn
-		untilFn Fn
+		atExpr    Expr
+		forExpr   Expr
+		untilExpr Expr
 	)
 	remaining := make(map[interface{}]interface{})
 	for k, v := range m {
@@ -392,48 +471,48 @@ func compileRepeat(yml interface{}) (Fn, string) {
 
 		switch kstr {
 		case "at":
-			fn, err := compile(v)
+			Expr, err := compile(v)
 			if err != "" {
 				return nil, addErrorTrace(err, kstr)
 			}
-			atFn = fn
+			atExpr = Expr
 		case "for":
-			fn, err := compile(v)
+			Expr, err := compile(v)
 			if err != "" {
 				return nil, addErrorTrace(err, kstr)
 			}
-			forFn = fn
+			forExpr = Expr
 		case "until":
-			fn, err := compile(v)
+			Expr, err := compile(v)
 			if err != "" {
 				return nil, addErrorTrace(err, kstr)
 			}
-			untilFn = fn
+			untilExpr = Expr
 		default:
 			remaining[k] = v
 		}
 	}
 
-	if atFn == nil {
+	if atExpr == nil {
 		return nil, "missing at"
 	}
 
-	remainingFn, err := compileMap(remaining)
+	actionExpr, err := compileMap(remaining)
 	if err != "" {
 		return nil, err
 	}
 
 	switch {
-	case forFn != nil:
+	case forExpr != nil:
 		return Fn(func() interface{} {
 			// TODO: check how do-on interacts with this blocking
-			atVal := atFn()
+			atVal := atExpr()
 			freq, err := parseFreq(atVal)
 			if err != nil {
 				panic(fmt.Sprintf("bad value for at: %v", atVal))
 			}
 
-			forVal := forFn()
+			forVal := forExpr()
 			dur, err := parseDuration(forVal)
 			if err != nil {
 				panic(fmt.Sprintf("bad value for for: %v", forVal))
@@ -447,11 +526,11 @@ func compileRepeat(yml interface{}) (Fn, string) {
 				case <-timer.C:
 					return nil
 				case <-ticker.C:
-					remainingFn()
+					actionExpr()
 				}
 			}
 		}), ""
-	case untilFn != nil:
+	case untilExpr != nil:
 		return nil, "until not implemented"
 	default:
 		return nil, "missing for or until"
