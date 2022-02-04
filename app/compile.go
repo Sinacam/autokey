@@ -109,14 +109,17 @@ type sliceExpr struct {
 }
 
 func newSliceExpr(subs []Expr) *sliceExpr {
-	se := sliceExpr{subs: subs}
+	se := sliceExpr{}
 	static := true
 	for _, v := range se.subs {
 		static = static && v.Static()
 	}
 	if static {
-		se.staticSubs = se.Eval().([]interface{})
-		se.subs = nil
+		for _, v := range se.subs {
+			se.staticSubs = append(se.staticSubs, v.Eval())
+		}
+	} else {
+		se.subs = subs
 	}
 	return &se
 }
@@ -378,8 +381,10 @@ func compileDo(yml interface{}) (Expr, string) {
 
 type hertz float64
 
-func parseFreq(yml interface{}) (hertz, error) {
-	s, ok := yml.(string)
+// parseFreq parses val as a frequency.
+// Accepts strings.
+func parseFreq(val interface{}) (hertz, error) {
+	s, ok := val.(string)
 	if !ok {
 		return 0, errors.New("cannot parse as frequency")
 	}
@@ -396,8 +401,10 @@ func parseFreq(yml interface{}) (hertz, error) {
 	return hertz(freq), nil
 }
 
-func parseDuration(yml interface{}) (time.Duration, error) {
-	s, ok := yml.(string)
+// parseDuration parses val as a duration.
+// Accepts strings.
+func parseDuration(val interface{}) (time.Duration, error) {
+	s, ok := val.(string)
 	if !ok {
 		return 0, errors.New("cannot parse as duration")
 	}
@@ -405,19 +412,64 @@ func parseDuration(yml interface{}) (time.Duration, error) {
 	return time.ParseDuration(s)
 }
 
+// parseTrigger parses val as a trigger which sends to ch.
+// Returns an installation function.
+// Accepts strings or slices.
+func parseTrigger(val interface{}, ch chan<- struct{}) (func(), error) {
+	// TODO: uninstall function?
+	switch yml := val.(type) {
+	case string:
+		inputs, err := parseInput(yml, autokey.KeyDown)
+		if err != nil {
+			return nil, err
+		}
+
+		return func() {
+			in := make(chan autokey.Input)
+			autokey.NotifyOn(in, inputs...)
+			go func() {
+				for range in {
+					select {
+					case ch <- struct{}{}:
+					default:
+					}
+				}
+			}()
+		}, nil
+	case []interface{}:
+		var installs []func()
+		for _, v := range yml {
+			install, err := parseTrigger(v, ch)
+			if err != nil {
+				return nil, err
+			}
+			installs = append(installs, install)
+		}
+		return func() {
+			for _, v := range installs {
+				v()
+			}
+		}, nil
+	}
+
+	return nil, errors.New("cannot parse as trigger")
+}
+
 type repeatExpr struct {
-	atExpr     Expr
-	forExpr    Expr
-	untilExpr  Expr
-	actionExpr Expr
-	staticAt   hertz
-	staticFor  time.Duration
+	atExpr      Expr
+	forExpr     Expr
+	untilExpr   Expr
+	actionExpr  Expr
+	staticAt    hertz
+	staticFor   time.Duration
+	staticUntil func()
+	untilCh     chan struct{}
 }
 
 func newRepeatExpr(atExpr, forExpr, untilExpr, actionExpr Expr) (*repeatExpr, string) {
 	re := &repeatExpr{
-		untilExpr:  untilExpr,
 		actionExpr: actionExpr,
+		untilCh:    make(chan struct{}),
 	}
 
 	if atExpr.Static() {
@@ -431,8 +483,19 @@ func newRepeatExpr(atExpr, forExpr, untilExpr, actionExpr Expr) (*repeatExpr, st
 		re.atExpr = atExpr
 	}
 
-	if untilExpr != nil {
-		return nil, "until not implemented"
+	if untilExpr == nil && forExpr == nil {
+		return nil, "must contain either until or for"
+	}
+
+	if untilExpr != nil && untilExpr.Static() {
+		val := untilExpr.Eval()
+		install, err := parseTrigger(val, re.untilCh)
+		if err != nil {
+			return nil, err.Error()
+		}
+		re.staticUntil = install
+	} else {
+		re.untilExpr = untilExpr
 	}
 
 	if forExpr != nil && forExpr.Static() {
@@ -466,8 +529,15 @@ func (re *repeatExpr) Eval() interface{} {
 		}
 	}
 
-	if re.untilExpr != nil {
-		return nil
+	var install func()
+	if re.untilExpr == nil {
+		install = re.staticUntil
+	} else {
+		val := re.untilExpr.Eval()
+		install, err = parseTrigger(val, re.untilCh)
+		if err != nil {
+			panic(fmt.Sprintf("bad value for until: %v", val))
+		}
 	}
 
 	var dur time.Duration
@@ -481,11 +551,14 @@ func (re *repeatExpr) Eval() interface{} {
 		}
 	}
 
+	install()
 	ticker := time.NewTicker(time.Duration(float64(time.Second) / float64(freq)))
 	defer ticker.Stop()
 	timer := time.NewTimer(dur)
 	for {
 		select {
+		case <-re.untilCh:
+			return nil
 		case <-timer.C:
 			return nil
 		case <-ticker.C:
