@@ -552,7 +552,9 @@ func (re *repeatExpr) Eval() interface{} {
 		}
 	}
 
-	install()
+	if install != nil {
+		install()
+	}
 	ticker := time.NewTicker(time.Duration(float64(time.Second) / float64(freq)))
 	defer ticker.Stop()
 	timer := time.NewTimer(dur)
