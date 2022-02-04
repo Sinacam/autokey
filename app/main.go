@@ -23,7 +23,7 @@ func main() {
 		return
 	}
 
-	fn, err := Compile(yml)
+	expr, err := Compile(yml)
 	if err != nil {
 		fmt.Println(err)
 		return
@@ -32,6 +32,6 @@ func main() {
 	autokey.Init()
 	defer autokey.Teardown()
 	fmt.Println("Installed")
-	fn()
+	expr.Eval()
 	time.Sleep(10 * time.Second)
 }
