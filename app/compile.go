@@ -236,7 +236,7 @@ func makeInputMap() map[string]autokey.Input {
 
 // parseInput parses val as a slice of Inputs.
 // Accepts int, string or a slice of them.
-func parseInput(val interface{}) ([]autokey.Input, error) {
+func parseInput(val interface{}, defaultFlag uint64) ([]autokey.Input, error) {
 	switch val := val.(type) {
 	case int:
 		return []autokey.Input{
@@ -248,11 +248,15 @@ func parseInput(val interface{}) ([]autokey.Input, error) {
 		if !ok {
 			break
 		}
+
+		if input.Flag == 0 {
+			input.Flag = defaultFlag
+		}
 		return []autokey.Input{input}, nil
 	case []interface{}:
 		var inputs []autokey.Input
 		for _, v := range val {
-			input, err := parseInput(v)
+			input, err := parseInput(v, defaultFlag)
 			if err != nil {
 				return nil, err
 			}
@@ -273,10 +277,11 @@ func newDoExpr(onExpr, actionExpr Expr) (*doExpr, string) {
 	de := &doExpr{actionExpr: actionExpr}
 	if onExpr.Static() {
 		val := onExpr.Eval()
-		inputs, err := parseInput(val)
+		inputs, err := parseInput(val, autokey.KeyDown)
 		if err != nil {
 			return nil, err.Error()
 		}
+
 		de.staticOn = inputs
 	} else {
 		de.onExpr = onExpr
@@ -299,16 +304,9 @@ func (de *doExpr) Eval() interface{} {
 	inputs := de.staticOn
 	if inputs == nil {
 		val := de.onExpr.Eval()
-		inputs, err = parseInput(val)
+		inputs, err = parseInput(val, autokey.KeyDown)
 		if err != nil {
 			panic(fmt.Sprintf("bad value for on: %v", val))
-		}
-
-		// on assumes keydown by default
-		for i := range inputs {
-			if inputs[i].Flag == 0 {
-				inputs[i].Flag = autokey.KeyDown
-			}
 		}
 	}
 
@@ -568,7 +566,7 @@ func newPressExpr(expr Expr) (*pressExpr, string) {
 	pe := &pressExpr{}
 	if expr.Static() {
 		val := expr.Eval()
-		inputs, err := parseInput(val)
+		inputs, err := parseInput(val, 0)
 		if err != nil {
 			return nil, err.Error()
 		}
@@ -585,7 +583,7 @@ func (pe *pressExpr) Eval() interface{} {
 	var err error
 	if inputs == nil {
 		val := pe.expr.Eval()
-		inputs, err = parseInput(val)
+		inputs, err = parseInput(val, 0)
 		if err != nil {
 			panic(fmt.Sprintf("bad value for press: %v", val))
 		}
@@ -642,7 +640,7 @@ func newHoldExpr(expr Expr) (*holdExpr, string) {
 	he := &holdExpr{}
 	if expr.Static() {
 		val := expr.Eval()
-		inputs, err := parseInput(val)
+		inputs, err := parseInput(val, autokey.KeyDown)
 		if err != nil {
 			return nil, err.Error()
 		}
@@ -659,7 +657,7 @@ func (he *holdExpr) Eval() interface{} {
 	var err error
 	if inputs == nil {
 		val := he.expr.Eval()
-		inputs, err = parseInput(val)
+		inputs, err = parseInput(val, autokey.KeyDown)
 		if err != nil {
 			panic(fmt.Sprintf("bad value for hold: %v", val))
 		}
