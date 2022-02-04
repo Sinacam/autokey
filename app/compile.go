@@ -505,6 +505,9 @@ func newRepeatExpr(atExpr, forExpr, untilExpr, actionExpr Expr) (*repeatExpr, st
 		if err != nil {
 			return nil, err.Error()
 		}
+		if dur <= 0 {
+			return nil, "duration has to be positive"
+		}
 		re.staticFor = dur
 	} else {
 		re.forExpr = forExpr
@@ -547,7 +550,7 @@ func (re *repeatExpr) Eval() interface{} {
 	} else {
 		val := re.forExpr.Eval()
 		dur, err = parseDuration(val)
-		if err != nil {
+		if err != nil || dur <= 0 {
 			panic(fmt.Sprintf("bad value for for: %v", val))
 		}
 	}
@@ -557,15 +560,27 @@ func (re *repeatExpr) Eval() interface{} {
 	}
 	ticker := time.NewTicker(time.Duration(float64(time.Second) / float64(freq)))
 	defer ticker.Stop()
-	timer := time.NewTimer(dur)
-	for {
-		select {
-		case <-re.untilCh:
-			return nil
-		case <-timer.C:
-			return nil
-		case <-ticker.C:
-			re.actionExpr.Eval()
+
+	if dur > 0 {
+		timer := time.NewTimer(dur)
+		for {
+			select {
+			case <-re.untilCh:
+				return nil
+			case <-timer.C:
+				return nil
+			case <-ticker.C:
+				re.actionExpr.Eval()
+			}
+		}
+	} else {
+		for {
+			select {
+			case <-re.untilCh:
+				return nil
+			case <-ticker.C:
+				re.actionExpr.Eval()
+			}
 		}
 	}
 }
