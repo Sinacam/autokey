@@ -567,7 +567,7 @@ type pressExpr struct {
 func newPressExpr(expr Expr) (*pressExpr, string) {
 	pe := &pressExpr{}
 	if expr.Static() {
-		val := pe.expr.Eval()
+		val := expr.Eval()
 		inputs, err := parseInput(val)
 		if err != nil {
 			return nil, err.Error()
@@ -641,7 +641,7 @@ type holdExpr struct {
 func newHoldExpr(expr Expr) (*holdExpr, string) {
 	he := &holdExpr{}
 	if expr.Static() {
-		val := he.expr.Eval()
+		val := expr.Eval()
 		inputs, err := parseInput(val)
 		if err != nil {
 			return nil, err.Error()
