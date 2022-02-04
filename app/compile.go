@@ -29,7 +29,7 @@ func addErrorTrace(err string, from interface{}) string {
 
 type Expr interface {
 	Eval() interface{} // Evaluate the expression value and its side-effect
-	Static() bool      // Returns true if the expression has no side-effect
+	Static() bool      // Returns true if the expression value is known statically and has no side-effect
 }
 
 // Compiles yml as a Expr recursively.
@@ -433,6 +433,10 @@ func newRepeatExpr(atExpr, forExpr, untilExpr, actionExpr Expr) (*repeatExpr, st
 		re.atExpr = atExpr
 	}
 
+	if untilExpr != nil {
+		return nil, "until not implemented"
+	}
+
 	if forExpr != nil && forExpr.Static() {
 		val := forExpr.Eval()
 		dur, err := parseDuration(val)
@@ -448,7 +452,52 @@ func newRepeatExpr(atExpr, forExpr, untilExpr, actionExpr Expr) (*repeatExpr, st
 }
 
 func (re *repeatExpr) Eval() interface{} {
-	return nil
+	if re.Static() {
+		return nil
+	}
+
+	var freq hertz
+	var err error
+	if re.atExpr == nil {
+		freq = re.staticAt
+	} else {
+		val := re.atExpr.Eval()
+		freq, err = parseFreq(val)
+		if err != nil {
+			panic(fmt.Sprintf("bad value for at: %v", val))
+		}
+	}
+
+	if re.untilExpr != nil {
+		return nil
+	}
+
+	var dur time.Duration
+	if re.forExpr == nil {
+		dur = re.staticFor
+	} else {
+		val := re.forExpr.Eval()
+		dur, err = parseDuration(val)
+		if err != nil {
+			panic(fmt.Sprintf("bad value for for: %v", val))
+		}
+	}
+
+	ticker := time.NewTicker(time.Duration(float64(time.Second) / float64(freq)))
+	defer ticker.Stop()
+	timer := time.NewTimer(dur)
+	for {
+		select {
+		case <-timer.C:
+			return nil
+		case <-ticker.C:
+			re.actionExpr.Eval()
+		}
+	}
+}
+
+func (re *repeatExpr) Static() bool {
+	return re.actionExpr.Static()
 }
 
 func compileRepeat(yml interface{}) (Expr, string) {
@@ -502,97 +551,144 @@ func compileRepeat(yml interface{}) (Expr, string) {
 		return nil, err
 	}
 
-	switch {
-	case forExpr != nil:
-		return Fn(func() interface{} {
-			// TODO: check how do-on interacts with this blocking
-			atVal := atExpr()
-			freq, err := parseFreq(atVal)
-			if err != nil {
-				panic(fmt.Sprintf("bad value for at: %v", atVal))
-			}
-
-			forVal := forExpr()
-			dur, err := parseDuration(forVal)
-			if err != nil {
-				panic(fmt.Sprintf("bad value for for: %v", forVal))
-			}
-
-			ticker := time.NewTicker(time.Duration(float64(time.Second) / freq))
-			defer ticker.Stop()
-			timer := time.NewTimer(dur)
-			for {
-				select {
-				case <-timer.C:
-					return nil
-				case <-ticker.C:
-					actionExpr()
-				}
-			}
-		}), ""
-	case untilExpr != nil:
-		return nil, "until not implemented"
-	default:
-		return nil, "missing for or until"
-	}
-}
-
-func compilePress(yml interface{}) (Fn, string) {
-	fn, err := compile(yml)
+	re, err := newRepeatExpr(atExpr, forExpr, untilExpr, actionExpr)
 	if err != "" {
 		return nil, err
 	}
-	return Fn(func() interface{} {
-		val := fn()
+
+	return re, ""
+}
+
+type pressExpr struct {
+	expr   Expr
+	static []autokey.Input
+}
+
+func newPressExpr(expr Expr) (*pressExpr, string) {
+	pe := &pressExpr{}
+	if expr.Static() {
+		val := pe.expr.Eval()
 		inputs, err := parseInput(val)
+		if err != nil {
+			return nil, err.Error()
+		}
+		pe.static = inputs
+	} else {
+		pe.expr = expr
+	}
+
+	return pe, ""
+}
+
+func (pe *pressExpr) Eval() interface{} {
+	inputs := pe.static
+	var err error
+	if inputs == nil {
+		val := pe.expr.Eval()
+		inputs, err = parseInput(val)
 		if err != nil {
 			panic(fmt.Sprintf("bad value for press: %v", val))
 		}
+	}
 
-		// Specifying nothing means keydown and keyup for press.
-		// Mouse down always mean mouse down + mouse up.
-		// TODO: homogenize mouse and key. This is a leaky abstraction.
-		// Order is keydown over all inputs before keyup to allow
-		// key combinations such as ctrl + c.
-		for _, input := range inputs {
-			if input.Flag == 0 {
-				input.Flag = autokey.KeyDown
-			}
+	// Specifying nothing means keydown and keyup for press.
+	// Mouse down always mean mouse down + mouse up.
+	// TODO: homogenize mouse and key. This is a leaky abstraction.
+	// Order is keydown over all inputs before keyup to allow
+	// key combinations such as ctrl + c.
+	for _, input := range inputs {
+		if input.Flag == 0 {
+			input.Flag = autokey.KeyDown
+		}
+		autokey.Send(input)
+	}
+
+	for _, input := range inputs {
+		switch input.Flag {
+		case 0:
+			input.Flag = autokey.KeyUp
 			autokey.Send(input)
+		case autokey.LeftMouseDown:
+			autokey.Send(autokey.Input{Flag: autokey.LeftMouseUp})
 		}
-
-		for _, input := range inputs {
-			switch input.Flag {
-			case 0:
-				input.Flag = autokey.KeyUp
-				autokey.Send(input)
-			case autokey.LeftMouseDown:
-				autokey.Send(autokey.Input{Flag: autokey.LeftMouseUp})
-			}
-		}
-
-		return nil
-	}), ""
+	}
+	return nil
 }
 
-func compileHold(yml interface{}) (Fn, string) {
-	fn, err := compile(yml)
+func (pe *pressExpr) Static() bool {
+	return false
+}
+
+func compilePress(yml interface{}) (Expr, string) {
+	expr, err := compile(yml)
 	if err != "" {
 		return nil, err
 	}
-	return Fn(func() interface{} {
-		val := fn()
+
+	pe, err := newPressExpr(expr)
+	if err != "" {
+		return nil, err
+	}
+
+	return pe, ""
+}
+
+type holdExpr struct {
+	expr   Expr
+	static []autokey.Input
+}
+
+func newHoldExpr(expr Expr) (*holdExpr, string) {
+	he := &holdExpr{}
+	if expr.Static() {
+		val := he.expr.Eval()
 		inputs, err := parseInput(val)
+		if err != nil {
+			return nil, err.Error()
+		}
+		he.static = inputs
+	} else {
+		he.expr = expr
+	}
+
+	return he, ""
+}
+
+func (he *holdExpr) Eval() interface{} {
+	inputs := he.static
+	var err error
+	if inputs == nil {
+		val := he.expr.Eval()
+		inputs, err = parseInput(val)
 		if err != nil {
 			panic(fmt.Sprintf("bad value for hold: %v", val))
 		}
-		for _, input := range inputs {
-			autokey.Send(input)
-		}
-		return nil
-	}), ""
+	}
+
+	for _, input := range inputs {
+		autokey.Send(input)
+	}
+	return nil
 }
 
-func compileFile(yml interface{}) (Fn, string) {
-	return nil, ymlErrorString(yml)
+func (he *holdExpr) Static() bool {
+	return false
+}
+
+func compileHold(yml interface{}) (Expr, string) {
+	expr, err := compile(yml)
+	if err != "" {
+		return nil, err
+	}
+
+	he, err := newHoldExpr(expr)
+	if err != "" {
+		return nil, err
+	}
+
+	return he, ""
+}
+
+func compileFile(yml interface{}) (Expr, string) {
+	return nil, "file not implemented"
 }
