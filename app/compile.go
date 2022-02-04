@@ -27,18 +27,15 @@ func addErrorTrace(err string, from interface{}) string {
 	return fmt.Sprintf("%v\n\tfrom %v", err, from)
 }
 
-// Fn is the result of a compiled yml config.
-// Fn may be used to only return a value or it may have further side effects.
-// If the object is a literal, the return value is the object itself.
-// If the object is an array, the return value is the slice of return values.
-// If the object is a map, the return value depends on the content.
-// All values are computed lazily on execution.
-type Fn func() interface{}
+type Expr interface {
+	Eval() interface{}
+	Static() bool
+}
 
-// Compiles yml as a Fn recursively.
+// Compiles yml as a Expr recursively.
 // Errors in the structure of yml is reported as an error.
-// Errors in values causes a panic during execution of Fn instead.
-func Compile(yml interface{}) (Fn, error) {
+// Errors in values causes a panic during execution of Expr instead.
+func Compile(yml interface{}) (Expr, error) {
 	fn, err := compile(yml)
 	if err != "" {
 		return nil, errors.New(err)
@@ -46,26 +43,58 @@ func Compile(yml interface{}) (Fn, error) {
 	return fn, nil
 }
 
+type boolExpr bool
+
+func (be boolExpr) Eval() interface{} {
+	return bool(be)
+}
+
+func (be boolExpr) Static() bool {
+	return true
+}
+
+type intExpr int
+
+func (ie intExpr) Eval() interface{} {
+	return int(ie)
+}
+
+func (ie intExpr) Static() bool {
+	return true
+}
+
+type floatExpr float64
+
+func (fe floatExpr) Eval() interface{} {
+	return float64(fe)
+}
+
+func (fe floatExpr) Static() bool {
+	return true
+}
+
+type stringExpr string
+
+func (se stringExpr) Eval() interface{} {
+	return string(se)
+}
+
+func (se stringExpr) Static() bool {
+	return true
+}
+
 // compile uses an error string because the error trace is built up
 // during recursion.
-func compile(yml interface{}) (Fn, string) {
+func compile(yml interface{}) (Expr, string) {
 	switch yml := yml.(type) {
 	case bool:
-		return Fn(func() interface{} {
-			return yml
-		}), ""
+		return boolExpr(yml), ""
 	case int:
-		return Fn(func() interface{} {
-			return yml
-		}), ""
+		return intExpr(yml), ""
 	case float64:
-		return Fn(func() interface{} {
-			return yml
-		}), ""
+		return floatExpr(yml), ""
 	case string:
-		return Fn(func() interface{} {
-			return yml
-		}), ""
+		return stringExpr(yml), ""
 	case []interface{}:
 		return compileSlice(yml)
 	case map[interface{}]interface{}:
@@ -74,27 +103,54 @@ func compile(yml interface{}) (Fn, string) {
 	return nil, ymlErrorString(yml)
 }
 
-func compileSlice(yml []interface{}) (Fn, string) {
-	var subfns []Fn
+type sliceExpr struct {
+	subs      []Expr
+	staticVal []interface{}
+}
+
+func newSliceExpr(subs []Expr) sliceExpr {
+	se := sliceExpr{subs: subs}
+	static := true
+	for _, v := range se.subs {
+		static = static && v.Static()
+	}
+	if static {
+		se.staticVal = se.Eval().([]interface{})
+	}
+	return se
+}
+
+func (se sliceExpr) Eval() interface{} {
+	if se.Static() {
+		return se.staticVal
+	}
+
+	var ret []interface{}
+	for _, v := range se.subs {
+		ret = append(ret, v.Eval())
+	}
+	return ret
+}
+
+func (se sliceExpr) Static() bool {
+	return se.staticVal != nil
+}
+
+func compileSlice(yml []interface{}) (Expr, string) {
+	var subs []Expr
 	for i, v := range yml {
-		fn, err := compile(v)
+		sub, err := compile(v)
 		if err != "" {
 			return nil, addErrorTrace(err, i)
 		}
-		subfns = append(subfns, fn)
+		subs = append(subs, sub)
 	}
 
-	return Fn(func() interface{} {
-		var ret []interface{}
-		for _, fn := range subfns {
-			ret = append(ret, fn())
-		}
-		return ret
-	}), ""
+	return newSliceExpr(subs), ""
 }
 
-func compileMap(yml map[interface{}]interface{}) (Fn, string) {
-	var fns []Fn
+func compileMap(yml map[interface{}]interface{}) (Expr, string) {
+	var subs []Expr
 	for k, v := range yml {
 		kstr, ok := k.(string)
 		if !ok {
@@ -104,46 +160,42 @@ func compileMap(yml map[interface{}]interface{}) (Fn, string) {
 		// TODO: refactor switch if they end up being identical
 		switch kstr {
 		case "do":
-			fn, err := compileDo(v)
+			sub, err := compileDo(v)
 			if err != "" {
 				return nil, addErrorTrace(err, kstr)
 			}
-			fns = append(fns, fn)
+			subs = append(subs, sub)
 		case "repeat":
-			fn, err := compileRepeat(v)
+			sub, err := compileRepeat(v)
 			if err != "" {
 				return nil, addErrorTrace(err, kstr)
 			}
-			fns = append(fns, fn)
+			subs = append(subs, sub)
 		case "press":
-			fn, err := compilePress(v)
+			sub, err := compilePress(v)
 			if err != "" {
 				return nil, addErrorTrace(err, kstr)
 			}
-			fns = append(fns, fn)
+			subs = append(subs, sub)
 		case "hold":
-			fn, err := compileHold(v)
+			sub, err := compileHold(v)
 			if err != "" {
 				return nil, addErrorTrace(err, kstr)
 			}
-			fns = append(fns, fn)
+			subs = append(subs, sub)
 		case "file":
-			fn, err := compileFile(v)
+			sub, err := compileFile(v)
 			if err != "" {
 				return nil, addErrorTrace(err, kstr)
 			}
-			fns = append(fns, fn)
+			subs = append(subs, sub)
 		default:
 			return nil, "invalid key " + kstr
 		}
 	}
 
-	return Fn(func() interface{} {
-		for _, fn := range fns {
-			fn()
-		}
-		return nil
-	}), ""
+	// maps are treated identical to slices after compilation
+	return newSliceExpr(subs), ""
 }
 
 var (
@@ -210,16 +262,53 @@ func parseInput(val interface{}) ([]autokey.Input, error) {
 	return nil, errors.New("cannot parse as Input")
 }
 
+type doExpr struct {
+	onExpr     Expr
+	actionExpr Expr
+}
+
+func (de doExpr) Eval() interface{} {
+	// If there is no trigger, do is a no-op.
+	if de.onExpr == nil {
+		de.actionExpr.Eval()
+	}
+
+	return Fn(func() interface{} {
+		val := onExpr()
+		inputs, err := parseInput(val)
+		if err != nil {
+			panic(fmt.Sprintf("bad value for on: %v", val))
+		}
+
+		// on assumes keydown by default
+		for i := range inputs {
+			if inputs[i].Flag == 0 {
+				inputs[i].Flag = autokey.KeyDown
+			}
+		}
+
+		ch := make(chan autokey.Input)
+		autokey.NotifyOn(ch, inputs...)
+		go func() {
+			for range ch {
+				remainingFn()
+			}
+		}()
+
+		return nil
+	}), ""
+}
+
 // compileDo compiles the map value with key "do".
 // Compiles by special-casing the "on" key as the trigger
 // and delegating to compileMap for the remaining.
-func compileDo(yml interface{}) (Fn, string) {
+func compileDo(yml interface{}) (Expr, string) {
 	m, ok := yml.(map[interface{}]interface{})
 	if !ok {
 		return nil, "value must be a map"
 	}
 
-	var onFn Fn
+	var onExpr Expr
 	remaining := make(map[interface{}]interface{})
 	for k, v := range m {
 		var kstr string
@@ -243,7 +332,7 @@ func compileDo(yml interface{}) (Fn, string) {
 			if err != "" {
 				return nil, addErrorTrace(err, kstr)
 			}
-			onFn = fn
+			onExpr = fn
 		default:
 			remaining[k] = v
 		}
@@ -254,35 +343,6 @@ func compileDo(yml interface{}) (Fn, string) {
 		return nil, err
 	}
 
-	// If there is no trigger, do is a no-op.
-	if onFn == nil {
-		return remainingFn, ""
-	}
-
-	return Fn(func() interface{} {
-		val := onFn()
-		inputs, err := parseInput(val)
-		if err != nil {
-			panic(fmt.Sprintf("bad value for on: %v", val))
-		}
-
-		// on assumes keydown by default
-		for i := range inputs {
-			if inputs[i].Flag == 0 {
-				inputs[i].Flag = autokey.KeyDown
-			}
-		}
-
-		ch := make(chan autokey.Input)
-		autokey.NotifyOn(ch, inputs...)
-		go func() {
-			for range ch {
-				remainingFn()
-			}
-		}()
-
-		return nil
-	}), ""
 }
 
 func parseFreq(yml interface{}) (float64, error) {
