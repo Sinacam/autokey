@@ -280,13 +280,12 @@ type doExpr struct {
 
 func newDoExpr(onExpr, actionExpr Expr) (*doExpr, string) {
 	de := &doExpr{actionExpr: actionExpr}
-	if onExpr.Static() {
+	if onExpr != nil && onExpr.Static() {
 		val := onExpr.Eval()
 		inputs, err := parseInput(val, autokey.KeyDown)
 		if err != nil {
 			return nil, err.Error()
 		}
-
 		de.staticOn = inputs
 	} else {
 		de.onExpr = onExpr
@@ -327,7 +326,7 @@ func (de *doExpr) Eval() interface{} {
 }
 
 func (de *doExpr) Static() bool {
-	return de.actionExpr.Static()
+	return de.actionExpr == nil && de.actionExpr.Static()
 }
 
 // compileDo compiles the map value with key "do".
@@ -570,7 +569,7 @@ func (re *repeatExpr) Eval() interface{} {
 }
 
 func (re *repeatExpr) Static() bool {
-	return re.actionExpr.Static()
+	return re.actionExpr == nil || re.actionExpr.Static()
 }
 
 func compileRepeat(yml interface{}) (Expr, string) {
