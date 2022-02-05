@@ -223,8 +223,10 @@ func makeInputMap() map[string]Input {
 	}
 	str := []string{
 		"Alt",
-		"Ctrl",
-		"Shift",
+		"left ctrl",
+		"right ctrl",
+		"left shift",
+		"right shift",
 		"Enter",
 		"Esc",
 		"Space",
@@ -238,8 +240,10 @@ func makeInputMap() map[string]Input {
 	}
 	val := []int{
 		Alt,
-		Ctrl,
-		Shift,
+		LeftCtrl,
+		RightCtrl,
+		LeftShift,
+		RightShift,
 		Enter,
 		Esc,
 		Space,
