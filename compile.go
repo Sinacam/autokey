@@ -215,11 +215,11 @@ func makeInputMap() map[string]Input {
 	for c := '0'; c <= '9'; c++ {
 		m[string(c)] = Input{Key: int(c)}
 	}
-	for c := 'A'; c <= 'Z'; c++ {
-		m[string(c)] = Input{Key: int(c)}
+	for c := 'a'; c <= 'z'; c++ {
+		m[string(c)] = Input{Key: int(c) - 'a' + 'A'}
 	}
 	for i := 1; i <= 12; i++ {
-		m[fmt.Sprintf("F%v", i)] = Input{Key: F1 + i - 1}
+		m[fmt.Sprintf("f%v", i)] = Input{Key: F1 + i - 1}
 	}
 	str := []string{
 		"Alt",
@@ -252,7 +252,7 @@ func makeInputMap() map[string]Input {
 		Delete,
 	}
 	for i := range str {
-		m[str[i]] = Input{Key: val[i]}
+		m[strings.ToLower(str[i])] = Input{Key: val[i]}
 	}
 
 	for k, v := range m {
@@ -278,7 +278,7 @@ func parseInput(val interface{}, defaultFlag uint64) ([]Input, error) {
 			{Key: val + '0'},
 		}, nil
 	case string:
-		val = strings.ToUpper(val)
+		val = strings.ToLower(val)
 		input, ok := inputMap[val]
 		if !ok {
 			break
