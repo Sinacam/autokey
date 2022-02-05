@@ -30,19 +30,21 @@ const (
 	F11 = sys.F11
 	F12 = sys.F12
 
-	Alt    = sys.Alt
-	Ctrl   = sys.Ctrl
-	Shift  = sys.Shift
-	Enter  = sys.Enter
-	Esc    = sys.Esc
-	Space  = sys.Space
-	Left   = sys.Left
-	Up     = sys.Up
-	Right  = sys.Right
-	Down   = sys.Down
-	End    = sys.End
-	Home   = sys.Home
-	Delete = sys.Delete
+	Alt        = sys.Alt
+	LeftCtrl   = sys.LeftCtrl
+	RightCtrl  = sys.RightCtrl
+	LeftShift  = sys.LeftShift
+	RightShift = sys.RightShift
+	Enter      = sys.Enter
+	Esc        = sys.Esc
+	Space      = sys.Space
+	Left       = sys.Left
+	Up         = sys.Up
+	Right      = sys.Right
+	Down       = sys.Down
+	End        = sys.End
+	Home       = sys.Home
+	Delete     = sys.Delete
 )
 
 var (
