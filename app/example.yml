@@ -46,3 +46,14 @@
         - pattern: "adds # to # physical damage >= 31"
           matches: clipboard
         - f7
+
+- do:
+    on: f6
+    repeat:
+      until:
+        - match clipboard:
+            file: phys.yml
+        - f7
+      do:
+        - press: left click
+        - press: [ctrl, alt, c]

@@ -23,7 +23,7 @@ func main() {
 		return
 	}
 
-	expr, err := Compile(yml)
+	expr, err := autokey.Compile(yml)
 	if err != nil {
 		fmt.Println(err)
 		return

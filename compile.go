@@ -1,4 +1,4 @@
-package main
+package autokey
 
 import (
 	"errors"
@@ -7,11 +7,8 @@ import (
 	"strings"
 	"time"
 
-	"github.com/Sinacam/autokey"
 	"gopkg.in/yaml.v2"
 )
-
-// TODO: move all local functions to custom types for better debugging and capabilities
 
 // ymlErrorString formats yml as an error string.
 func ymlErrorString(yml interface{}) string {
@@ -213,38 +210,38 @@ var (
 // If there are suffixes "down" and "up", Input.Flag is KeyDown and KeyUp,
 // otherwise it's 0.
 // Mouse input is an exception because it is only a flag.
-func makeInputMap() map[string]autokey.Input {
-	m := make(map[string]autokey.Input)
+func makeInputMap() map[string]Input {
+	m := make(map[string]Input)
 	for c := '0'; c <= '9'; c++ {
-		m[string(c)] = autokey.Input{Key: int(c)}
+		m[string(c)] = Input{Key: int(c)}
 	}
 	for c := 'A'; c <= 'Z'; c++ {
-		m[string(c)] = autokey.Input{Key: int(c)}
+		m[string(c)] = Input{Key: int(c)}
 	}
 	for i := 1; i <= 12; i++ {
-		m[fmt.Sprintf("F%v", i)] = autokey.Input{Key: autokey.F1 + i - 1}
+		m[fmt.Sprintf("F%v", i)] = Input{Key: F1 + i - 1}
 	}
 
 	for k, v := range m {
-		v.Flag = autokey.KeyDown
+		v.Flag = KeyDown
 		m[k+" down"] = v
-		v.Flag = autokey.KeyUp
+		v.Flag = KeyUp
 		m[k+" up"] = v
 	}
 
-	m["left click"] = autokey.Input{Flag: autokey.LeftMouseDown}
-	m["left click up"] = autokey.Input{Flag: autokey.LeftMouseUp}
-	m["right click"] = autokey.Input{Flag: autokey.RightMouseDown}
-	m["right click up"] = autokey.Input{Flag: autokey.RightMouseUp}
+	m["left click"] = Input{Flag: LeftMouseDown}
+	m["left click up"] = Input{Flag: LeftMouseUp}
+	m["right click"] = Input{Flag: RightMouseDown}
+	m["right click up"] = Input{Flag: RightMouseUp}
 	return m
 }
 
 // parseInput parses val as a slice of Inputs.
 // Accepts int, string or a slice of them.
-func parseInput(val interface{}, defaultFlag uint64) ([]autokey.Input, error) {
+func parseInput(val interface{}, defaultFlag uint64) ([]Input, error) {
 	switch val := val.(type) {
 	case int:
-		return []autokey.Input{
+		return []Input{
 			{Key: val + '0'},
 		}, nil
 	case string:
@@ -257,9 +254,9 @@ func parseInput(val interface{}, defaultFlag uint64) ([]autokey.Input, error) {
 		if input.Flag == 0 {
 			input.Flag = defaultFlag
 		}
-		return []autokey.Input{input}, nil
+		return []Input{input}, nil
 	case []interface{}:
-		var inputs []autokey.Input
+		var inputs []Input
 		for _, v := range val {
 			input, err := parseInput(v, defaultFlag)
 			if err != nil {
@@ -275,14 +272,14 @@ func parseInput(val interface{}, defaultFlag uint64) ([]autokey.Input, error) {
 type doExpr struct {
 	onExpr     Expr
 	actionExpr Expr
-	staticOn   []autokey.Input
+	staticOn   []Input
 }
 
 func newDoExpr(onExpr, actionExpr Expr) (*doExpr, string) {
 	de := &doExpr{actionExpr: actionExpr}
 	if onExpr != nil && onExpr.Static() {
 		val := onExpr.Eval()
-		inputs, err := parseInput(val, autokey.KeyDown)
+		inputs, err := parseInput(val, KeyDown)
 		if err != nil {
 			return nil, err.Error()
 		}
@@ -308,14 +305,14 @@ func (de *doExpr) Eval() interface{} {
 	inputs := de.staticOn
 	if inputs == nil {
 		val := de.onExpr.Eval()
-		inputs, err = parseInput(val, autokey.KeyDown)
+		inputs, err = parseInput(val, KeyDown)
 		if err != nil {
 			panic(fmt.Sprintf("bad value for on: %v", val))
 		}
 	}
 
-	ch := make(chan autokey.Input)
-	autokey.NotifyOn(ch, inputs...)
+	ch := make(chan Input)
+	NotifyOn(ch, inputs...)
 	go func() {
 		for range ch {
 			de.actionExpr.Eval()
@@ -420,14 +417,14 @@ func parseTrigger(val interface{}, ch chan<- struct{}) (func(), error) {
 	// TODO: uninstall function?
 	switch yml := val.(type) {
 	case string:
-		inputs, err := parseInput(yml, autokey.KeyDown)
+		inputs, err := parseInput(yml, KeyDown)
 		if err != nil {
 			return nil, err
 		}
 
 		return func() {
-			in := make(chan autokey.Input)
-			autokey.NotifyOn(in, inputs...)
+			in := make(chan Input)
+			NotifyOn(in, inputs...)
 			go func() {
 				for range in {
 					select {
@@ -650,7 +647,7 @@ func compileRepeat(yml interface{}) (Expr, string) {
 
 type pressExpr struct {
 	expr   Expr
-	static []autokey.Input
+	static []Input
 }
 
 func newPressExpr(expr Expr) (*pressExpr, string) {
@@ -687,18 +684,18 @@ func (pe *pressExpr) Eval() interface{} {
 	// key combinations such as ctrl + c.
 	for _, input := range inputs {
 		if input.Flag == 0 {
-			input.Flag = autokey.KeyDown
+			input.Flag = KeyDown
 		}
-		autokey.Send(input)
+		Send(input)
 	}
 
 	for _, input := range inputs {
 		switch input.Flag {
 		case 0:
-			input.Flag = autokey.KeyUp
-			autokey.Send(input)
-		case autokey.LeftMouseDown:
-			autokey.Send(autokey.Input{Flag: autokey.LeftMouseUp})
+			input.Flag = KeyUp
+			Send(input)
+		case LeftMouseDown:
+			Send(Input{Flag: LeftMouseUp})
 		}
 	}
 	return nil
@@ -724,14 +721,14 @@ func compilePress(yml interface{}) (Expr, string) {
 
 type holdExpr struct {
 	expr   Expr
-	static []autokey.Input
+	static []Input
 }
 
 func newHoldExpr(expr Expr) (*holdExpr, string) {
 	he := &holdExpr{}
 	if expr.Static() {
 		val := expr.Eval()
-		inputs, err := parseInput(val, autokey.KeyDown)
+		inputs, err := parseInput(val, KeyDown)
 		if err != nil {
 			return nil, err.Error()
 		}
@@ -748,14 +745,14 @@ func (he *holdExpr) Eval() interface{} {
 	var err error
 	if inputs == nil {
 		val := he.expr.Eval()
-		inputs, err = parseInput(val, autokey.KeyDown)
+		inputs, err = parseInput(val, KeyDown)
 		if err != nil {
 			panic(fmt.Sprintf("bad value for hold: %v", val))
 		}
 	}
 
 	for _, input := range inputs {
-		autokey.Send(input)
+		Send(input)
 	}
 	return nil
 }
