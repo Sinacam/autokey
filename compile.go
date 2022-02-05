@@ -114,7 +114,7 @@ func newSliceExpr(subs []Expr) *sliceExpr {
 
 	se := sliceExpr{static: static}
 	if static {
-		for _, v := range se.subs {
+		for _, v := range subs {
 			se.staticSubs = append(se.staticSubs, v.Eval())
 		}
 	} else {
