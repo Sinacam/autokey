@@ -19,6 +19,13 @@
 - do:
     on: f6
     repeat:
+      at: 10hz
+      until: f7
+      press: [ctrl, left click]
+
+- do:
+    on: f6
+    repeat:
       at: 4hz
       press: left click
       until:

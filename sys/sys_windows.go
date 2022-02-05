@@ -47,6 +47,20 @@ const (
 	F22 = int(C.VK_F22)
 	F23 = int(C.VK_F23)
 	F24 = int(C.VK_F24)
+
+	Alt    = int(C.VK_MENU)
+	Ctrl   = int(C.VK_CONTROL)
+	Shift  = int(C.VK_SHIFT)
+	Enter  = int(C.VK_RETURN)
+	Esc    = int(C.VK_ESCAPE)
+	Space  = int(C.VK_SPACE)
+	Left   = int(C.VK_LEFT)
+	Up     = int(C.VK_UP)
+	Right  = int(C.VK_RIGHT)
+	Down   = int(C.VK_DOWN)
+	End    = int(C.VK_END)
+	Home   = int(C.VK_HOME)
+	Delete = int(C.VK_DELETE)
 )
 
 var (

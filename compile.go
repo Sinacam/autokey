@@ -221,6 +221,39 @@ func makeInputMap() map[string]Input {
 	for i := 1; i <= 12; i++ {
 		m[fmt.Sprintf("F%v", i)] = Input{Key: F1 + i - 1}
 	}
+	str := []string{
+		"Alt",
+		"Ctrl",
+		"Shift",
+		"Enter",
+		"Esc",
+		"Space",
+		"Left",
+		"Up",
+		"Right",
+		"Down",
+		"End",
+		"Home",
+		"Delete",
+	}
+	val := []int{
+		Alt,
+		Ctrl,
+		Shift,
+		Enter,
+		Esc,
+		Space,
+		Left,
+		Up,
+		Right,
+		Down,
+		End,
+		Home,
+		Delete,
+	}
+	for i := range str {
+		m[str[i]] = Input{Key: val[i]}
+	}
 
 	for k, v := range m {
 		v.Flag = KeyDown

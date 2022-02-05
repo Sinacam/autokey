@@ -29,6 +29,20 @@ const (
 	F10 = sys.F10
 	F11 = sys.F11
 	F12 = sys.F12
+
+	Alt    = sys.Alt
+	Ctrl   = sys.Ctrl
+	Shift  = sys.Shift
+	Enter  = sys.Enter
+	Esc    = sys.Esc
+	Space  = sys.Space
+	Left   = sys.Left
+	Up     = sys.Up
+	Right  = sys.Right
+	Down   = sys.Down
+	End    = sys.End
+	Home   = sys.Home
+	Delete = sys.Delete
 )
 
 var (
