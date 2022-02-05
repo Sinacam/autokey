@@ -3,14 +3,13 @@ package main
 import (
 	"fmt"
 	"os"
-	"time"
 
 	"github.com/Sinacam/autokey"
 	"gopkg.in/yaml.v2"
 )
 
 func main() {
-	f, err := os.Open("short.yml")
+	f, err := os.Open("input.yml")
 	if err != nil {
 		fmt.Println(err)
 		return
@@ -31,7 +30,8 @@ func main() {
 
 	autokey.Init()
 	defer autokey.Teardown()
-	fmt.Println("Installed")
+	fmt.Println("Installed, press enter to exit")
 	expr.Eval()
-	time.Sleep(10 * time.Second)
+	// time.Sleep(10 * time.Second)
+	fmt.Scanln()
 }
