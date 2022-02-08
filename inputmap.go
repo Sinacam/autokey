@@ -27,6 +27,20 @@ func makeInputMap() map[string]Input {
 	}
 
 	str := []string{
+		"LeftClick",
+		"RightClick",
+		"F1",
+		"F2",
+		"F3",
+		"F4",
+		"F5",
+		"F6",
+		"F7",
+		"F8",
+		"F9",
+		"F10",
+		"F11",
+		"F12",
 		"Alt",
 		"Ctrl",
 		"LeftCtrl",
@@ -46,6 +60,20 @@ func makeInputMap() map[string]Input {
 		"Delete",
 	}
 	val := []int{
+		LeftClick,
+		RightClick,
+		F1,
+		F2,
+		F3,
+		F4,
+		F5,
+		F6,
+		F7,
+		F8,
+		F9,
+		F10,
+		F11,
+		F12,
 		Alt,
 		Ctrl,
 		LeftCtrl,
@@ -74,11 +102,6 @@ func makeInputMap() map[string]Input {
 		v.Flag = KeyUp
 		m[k+" up"] = v
 	}
-
-	m["left click"] = Input{Flag: LeftMouseDown}
-	m["left click up"] = Input{Flag: LeftMouseUp}
-	m["right click"] = Input{Flag: RightMouseDown}
-	m["right click up"] = Input{Flag: RightMouseUp}
 	return m
 }
 

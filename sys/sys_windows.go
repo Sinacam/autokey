@@ -16,10 +16,10 @@ const (
 	// so some mapping has to happen regardless.
 	KeyDown = iota + 1
 	KeyUp
-	LeftMouseDown
-	LeftMouseUp
-	RightMouseDown
-	RightMouseUp
+
+	// Mouse clicks are represented as keys above the keyboard key range.
+	LeftMouse = int(iota + 256)
+	RightMouse
 )
 
 const (
@@ -71,17 +71,35 @@ var (
 	InvalidFlag = errors.New("invalid flag")
 )
 
-func KeybdEvent(k int, flag uint64) error {
+func Send(k int, flag uint64) error {
+	if k < 256 {
+		var arg C.DWORD
+		switch flag {
+		case KeyDown:
+			arg = 0
+		case KeyUp:
+			arg = C.KEYEVENTF_KEYUP
+		default:
+			return InvalidFlag
+		}
+		C.keybd_event(C.BYTE(k), 0, arg, 0)
+		return nil
+	}
+
 	var arg C.DWORD
-	switch flag {
-	case KeyDown:
-		arg = 0
-	case KeyUp:
-		arg = C.KEYEVENTF_KEYUP
+	switch {
+	case k == LeftMouse && flag == KeyDown:
+		arg = C.MOUSEEVENTF_LEFTDOWN
+	case k == LeftMouse && flag == KeyUp:
+		arg = C.MOUSEEVENTF_LEFTUP
+	case k == RightMouse && flag == KeyDown:
+		arg = C.MOUSEEVENTF_RIGHTDOWN
+	case k == RightMouse && flag == KeyUp:
+		arg = C.MOUSEEVENTF_RIGHTUP
 	default:
 		return InvalidFlag
 	}
-	C.keybd_event(C.BYTE(k), 0, arg, 0)
+	C.mouse_event(arg, 0, 0, 0, 0)
 	return nil
 }
 
@@ -89,24 +107,6 @@ func GetClipboardText() string {
 	cstr := C.getClipboardText()
 	defer C.free(unsafe.Pointer(cstr))
 	return C.GoString(cstr)
-}
-
-func MouseEvent(flag uint64) error {
-	var arg C.DWORD
-	switch flag {
-	case LeftMouseDown:
-		arg = C.MOUSEEVENTF_LEFTDOWN
-	case LeftMouseUp:
-		arg = C.MOUSEEVENTF_LEFTUP
-	case RightMouseDown:
-		arg = C.MOUSEEVENTF_RIGHTDOWN
-	case RightMouseUp:
-		arg = C.MOUSEEVENTF_RIGHTUP
-	default:
-		return InvalidFlag
-	}
-	C.mouse_event(arg, 0, 0, 0, 0)
-	return nil
 }
 
 func SetGlobalHook() {

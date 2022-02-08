@@ -162,41 +162,26 @@ func compileMap(yml map[interface{}]interface{}) (Expr, string) {
 			return nil, "key must be a string"
 		}
 
-		// TODO: refactor switch if they end up being identical
+		var sub Expr
+		var err string
 		switch kstr {
 		case "do":
-			sub, err := compileDo(v)
-			if err != "" {
-				return nil, addErrorTrace(err, kstr)
-			}
-			subs = append(subs, sub)
+			sub, err = compileDo(v)
 		case "repeat":
-			sub, err := compileRepeat(v)
-			if err != "" {
-				return nil, addErrorTrace(err, kstr)
-			}
-			subs = append(subs, sub)
+			sub, err = compileRepeat(v)
 		case "press":
-			sub, err := compilePress(v)
-			if err != "" {
-				return nil, addErrorTrace(err, kstr)
-			}
-			subs = append(subs, sub)
+			sub, err = compilePress(v)
 		case "hold":
-			sub, err := compileHold(v)
-			if err != "" {
-				return nil, addErrorTrace(err, kstr)
-			}
-			subs = append(subs, sub)
+			sub, err = compileHold(v)
 		case "file":
-			sub, err := compileFile(v)
-			if err != "" {
-				return nil, addErrorTrace(err, kstr)
-			}
-			subs = append(subs, sub)
+			sub, err = compileFile(v)
 		default:
 			return nil, "invalid key " + kstr
 		}
+		if err != "" {
+			return nil, addErrorTrace(err, kstr)
+		}
+		subs = append(subs, sub)
 	}
 
 	// maps are treated identical to slices after compilation
@@ -645,8 +630,6 @@ func (pe *pressExpr) Eval() interface{} {
 	}
 
 	// Specifying nothing means keydown and keyup for press.
-	// Mouse down always mean mouse down + mouse up.
-	// TODO: homogenize mouse and key. This is a leaky abstraction.
 	// Order is keydown over all inputs before keyup to allow
 	// key combinations such as ctrl + c.
 	for _, input := range inputs {
@@ -657,12 +640,9 @@ func (pe *pressExpr) Eval() interface{} {
 	}
 
 	for _, input := range inputs {
-		switch input.Flag {
-		case 0:
+		if input.Flag == 0 {
 			input.Flag = KeyUp
 			Send(input)
-		case LeftMouseDown:
-			Send(Input{Flag: LeftMouseUp})
 		}
 	}
 	return nil
