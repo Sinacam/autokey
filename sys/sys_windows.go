@@ -119,14 +119,30 @@ func Unhook() {
 
 func GetInput() (int, uint64) {
 	input := C.getInput()
+	var key int
 	var flag uint64
 	switch input.flag {
 	case C.WM_KEYDOWN:
+		key = int(input.key)
 		flag = KeyDown
 	case C.WM_KEYUP:
+		key = int(input.key)
+		flag = KeyUp
+	case C.WM_LBUTTONDOWN:
+		key = LeftMouse
+		flag = KeyDown
+	case C.WM_LBUTTONUP:
+		key = LeftMouse
+		flag = KeyUp
+	case C.WM_RBUTTONDOWN:
+		key = RightMouse
+		flag = KeyDown
+	case C.WM_RBUTTONUP:
+		key = RightMouse
 		flag = KeyUp
 	default:
+		key = int(input.key)
 		flag = uint64(input.flag)
 	}
-	return int(input.key), uint64(flag)
+	return key, uint64(flag)
 }
