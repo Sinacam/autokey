@@ -83,6 +83,7 @@ func (se stringExpr) Static() bool {
 
 // compile uses an error string because the error trace is built up
 // during recursion.
+// TODO: migrate to recursive errors
 func compile(yml interface{}) (Expr, string) {
 	switch yml := yml.(type) {
 	case bool:
@@ -829,7 +830,7 @@ func newFileExpr(expr Expr) (*fileExpr, string) {
 		}
 		defer f.Close()
 
-		var m map[interface{}]interface{}
+		var m interface{}
 		err = yaml.NewDecoder(f).Decode(&m)
 		if err != nil {
 			return nil, err.Error()
