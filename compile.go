@@ -3,6 +3,7 @@ package autokey
 import (
 	"errors"
 	"fmt"
+	"os"
 	"strconv"
 	"strings"
 	"time"
@@ -82,6 +83,7 @@ func (se stringExpr) Static() bool {
 
 // compile uses an error string because the error trace is built up
 // during recursion.
+// TODO: migrate to recursive errors
 func compile(yml interface{}) (Expr, string) {
 	switch yml := yml.(type) {
 	case bool:
@@ -812,6 +814,96 @@ func compileHold(yml interface{}) (Expr, string) {
 	return he, ""
 }
 
+type fileExpr struct {
+	expr       Expr        // expr is not static
+	staticExpr Expr        // expr is static, but file content is not
+	staticVal  interface{} // both expr and file content is static
+}
+
+func newFileExpr(expr Expr) (*fileExpr, string) {
+	fe := &fileExpr{}
+	if expr.Static() {
+		val := expr.Eval()
+		path, ok := val.(string)
+		if !ok {
+			return nil, "file path must be a string"
+		}
+		f, err := os.Open(path)
+		if err != nil {
+			return nil, err.Error()
+		}
+		defer f.Close()
+
+		var m interface{}
+		err = yaml.NewDecoder(f).Decode(&m)
+		if err != nil {
+			return nil, err.Error()
+		}
+
+		mexpr, err := Compile(m)
+		if err != nil {
+			return nil, err.Error()
+		}
+
+		if mexpr.Static() {
+			fe.staticVal = mexpr.Eval()
+		} else {
+			fe.staticExpr = mexpr
+		}
+	} else {
+		fe.expr = expr
+	}
+	return fe, ""
+}
+
+func (fe *fileExpr) Eval() interface{} {
+	if fe.staticVal != nil {
+		return fe.staticVal
+	}
+
+	if fe.staticExpr != nil {
+		return fe.staticExpr.Eval()
+	}
+
+	val := fe.expr.Eval()
+	path, ok := val.(string)
+	if !ok {
+		panic(fmt.Sprintf("bad value for file: %v", val))
+	}
+	f, err := os.Open(path)
+	if err != nil {
+		panic(err)
+	}
+	defer f.Close()
+
+	var m map[interface{}]interface{}
+	err = yaml.NewDecoder(f).Decode(&m)
+	if err != nil {
+		panic(err)
+	}
+
+	mexpr, err := Compile(m)
+	if err != nil {
+		panic(err)
+	}
+
+	return mexpr.Eval()
+}
+
+func (fe *fileExpr) Static() bool {
+	return fe.staticVal != nil
+}
+
 func compileFile(yml interface{}) (Expr, string) {
-	return nil, "file not implemented"
+	expr, err := compile(yml)
+	if err != "" {
+		return nil, err
+	}
+
+	fe, err := newFileExpr(expr)
+	if err != "" {
+		return nil, err
+	}
+
+	return fe, ""
 }
