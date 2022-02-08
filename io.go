@@ -93,7 +93,6 @@ func (im *inputMonitor) Init() {
 	go func() {
 		for {
 			k, f := sys.GetInput()
-			input := Input{Key: k, Flag: f}
 
 			select {
 			case <-im.done:
@@ -101,6 +100,13 @@ func (im *inputMonitor) Init() {
 			default:
 			}
 
+			// GetInput may return k == 0 right after initialization and after teardown
+			// as means to unblock.
+			if k == 0 {
+				continue
+			}
+
+			input := Input{Key: k, Flag: f}
 			im.dispatch(input)
 		}
 	}()

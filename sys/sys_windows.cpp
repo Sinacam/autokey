@@ -42,7 +42,8 @@ namespace input
 
 LRESULT globalHook(int n, WPARAM w, LPARAM l)
 {
-    if(w != WM_KEYDOWN && w != WM_KEYUP)
+    if(w != WM_KEYDOWN && w != WM_KEYUP && w != WM_LBUTTONDOWN &&
+       w != WM_LBUTTONUP && w != WM_RBUTTONDOWN && w != WM_RBUTTONUP)
         return CallNextHookEx(nullptr, n, w, l);
 
     auto& hs = *(PKBDLLHOOKSTRUCT)l;
