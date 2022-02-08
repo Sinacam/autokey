@@ -31,8 +31,10 @@ const (
 	F12 = sys.F12
 
 	Alt        = sys.Alt
+	Ctrl       = sys.Ctrl
 	LeftCtrl   = sys.LeftCtrl
 	RightCtrl  = sys.RightCtrl
+	Shift      = sys.Shift
 	LeftShift  = sys.LeftShift
 	RightShift = sys.RightShift
 	Enter      = sys.Enter

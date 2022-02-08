@@ -49,8 +49,10 @@ const (
 	F24 = int(C.VK_F24)
 
 	Alt        = int(C.VK_MENU)
+	Ctrl       = int(C.VK_CONTROL)
 	LeftCtrl   = int(C.VK_LCONTROL)
 	RightCtrl  = int(C.VK_RCONTROL)
+	Shift      = int(C.VK_SHIFT)
 	LeftShift  = int(C.VK_LSHIFT)
 	RightShift = int(C.VK_RSHIFT)
 	Enter      = int(C.VK_RETURN)
