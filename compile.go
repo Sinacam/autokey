@@ -173,6 +173,8 @@ func compileMap(yml map[interface{}]interface{}) (Expr, string) {
 			sub, err = compilePress(v)
 		case "hold":
 			sub, err = compileHold(v)
+		case "release":
+			sub, err = compileRelease(v)
 		case "file":
 			sub, err = compileFile(v)
 		default:
@@ -720,6 +722,62 @@ func compileHold(yml interface{}) (Expr, string) {
 	}
 
 	return he, ""
+}
+
+type releaseExpr struct {
+	expr   Expr
+	static []Input
+}
+
+func newReleaseExpr(expr Expr) (*releaseExpr, string) {
+	re := &releaseExpr{}
+	if expr.Static() {
+		val := expr.Eval()
+		inputs, err := parseInput(val, KeyUp)
+		if err != nil {
+			return nil, err.Error()
+		}
+		re.static = inputs
+	} else {
+		re.expr = expr
+	}
+
+	return re, ""
+}
+
+func (re *releaseExpr) Eval() interface{} {
+	inputs := re.static
+	var err error
+	if inputs == nil {
+		val := re.expr.Eval()
+		inputs, err = parseInput(val, KeyDown)
+		if err != nil {
+			panic(fmt.Sprintf("bad value for hold: %v", val))
+		}
+	}
+
+	for _, input := range inputs {
+		Send(input)
+	}
+	return nil
+}
+
+func (re *releaseExpr) Static() bool {
+	return false
+}
+
+func compileRelease(yml interface{}) (Expr, string) {
+	expr, err := compile(yml)
+	if err != "" {
+		return nil, err
+	}
+
+	re, err := newReleaseExpr(expr)
+	if err != "" {
+		return nil, err
+	}
+
+	return re, ""
 }
 
 type fileExpr struct {
