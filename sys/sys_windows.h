@@ -10,7 +10,7 @@ extern "C"
 #endif
 
     const char* getClipboardText();
-    LRESULT globalHook(int n, WPARAM w, LPARAM l);
+    LRESULT globalKeyboardHook(int n, WPARAM w, LPARAM l);
     void setGlobalHook();
     void unhook();
 

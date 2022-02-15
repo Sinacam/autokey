@@ -32,7 +32,7 @@ const char* getClipboardText()
 
 namespace input
 {
-    HHOOK hook;
+    HHOOK kbhook, mhook;
     std::mutex mtx;
     input_t value{};
     std::condition_variable cv;
@@ -40,10 +40,9 @@ namespace input
     std::atomic<int> refCount{};
 } // namespace input
 
-LRESULT globalHook(int n, WPARAM w, LPARAM l)
+LRESULT globalKeyboardHook(int n, WPARAM w, LPARAM l)
 {
-    if(w != WM_KEYDOWN && w != WM_KEYUP && w != WM_LBUTTONDOWN &&
-       w != WM_LBUTTONUP && w != WM_RBUTTONDOWN && w != WM_RBUTTONUP)
+    if(w != WM_KEYDOWN && w != WM_KEYUP)
         return CallNextHookEx(nullptr, n, w, l);
 
     auto& hs = *(PKBDLLHOOKSTRUCT)l;
@@ -59,9 +58,32 @@ LRESULT globalHook(int n, WPARAM w, LPARAM l)
     return CallNextHookEx(nullptr, n, w, l);
 }
 
+LRESULT globalMouseHook(int n, WPARAM w, LPARAM l)
+{
+    uint64_t flag = 0;
+    switch(w)
+    {
+    case WM_LBUTTONDOWN:
+    case WM_LBUTTONUP:
+    case WM_RBUTTONDOWN:
+    case WM_RBUTTONUP: flag = uint64_t(w);
+    }
+
+    {
+        std::lock_guard lk{input::mtx};
+        input::value = {.key = 0, .flag = uint64_t(w)};
+        input::ready = true;
+    }
+    input::cv.notify_one();
+
+    return CallNextHookEx(nullptr, n, w, l);
+}
+
 void setGlobalHook()
 {
-    input::hook = SetWindowsHookEx(WH_KEYBOARD_LL, globalHook, nullptr, 0);
+    input::kbhook =
+        SetWindowsHookEx(WH_KEYBOARD_LL, globalKeyboardHook, nullptr, 0);
+    input::mhook = SetWindowsHookEx(WH_MOUSE_LL, globalMouseHook, nullptr, 0);
     input::refCount++;
     MSG msg;
     while(input::refCount > 0 && !GetMessage(&msg, nullptr, 0, 0))
@@ -73,7 +95,8 @@ void setGlobalHook()
 
 void unhook()
 {
-    UnhookWindowsHookEx(input::hook);
+    UnhookWindowsHookEx(input::kbhook);
+    UnhookWindowsHookEx(input::mhook);
     input::refCount--;
 }
 
@@ -82,5 +105,7 @@ input_t getInput()
     std::unique_lock lk{input::mtx};
     input::cv.wait(lk, [] { return input::ready || input::refCount == 0; });
     input::ready = false;
-    return input::value;
+    auto tmp = input::value;
+    input::value = {};
+    return tmp;
 }
