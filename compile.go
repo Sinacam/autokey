@@ -284,9 +284,14 @@ func (de *doExpr) Static() bool {
 // Compiles by special-casing the "on" key as the trigger
 // and delegating to compileMap for the remaining.
 func compileDo(yml interface{}) (Expr, string) {
-	m, ok := yml.(map[interface{}]interface{})
-	if !ok {
-		return nil, "value must be a map"
+	var m map[interface{}]interface{}
+	switch yml := yml.(type) {
+	case map[interface{}]interface{}:
+		m = yml
+	case []interface{}:
+		return compileSlice(yml)
+	default:
+		return nil, "value must be a mapping or sequence"
 	}
 
 	var onExpr Expr
@@ -543,7 +548,7 @@ func (re *repeatExpr) Static() bool {
 func compileRepeat(yml interface{}) (Expr, string) {
 	m, ok := yml.(map[interface{}]interface{})
 	if !ok {
-		return nil, "value must be a map"
+		return nil, "value must be a mapping"
 	}
 
 	var (
