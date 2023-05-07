@@ -2,13 +2,19 @@ package main
 
 import (
 	"fmt"
+	"os"
 
 	"github.com/Sinacam/autokey"
 )
 
 func main() {
+	ymlfile := "input.yml"
+	if len(os.Args) > 1 {
+		ymlfile = os.Args[1]
+	}
+
 	yml := map[interface{}]interface{}{
-		"file": "input.yml",
+		"file": ymlfile,
 	}
 
 	expr, err := autokey.Compile(yml)

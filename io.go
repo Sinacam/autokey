@@ -44,6 +44,16 @@ const (
 	End        = sys.End
 	Home       = sys.Home
 	Delete     = sys.Delete
+	Num0       = sys.Num0
+	Num1       = sys.Num1
+	Num2       = sys.Num2
+	Num3       = sys.Num3
+	Num4       = sys.Num4
+	Num5       = sys.Num5
+	Num6       = sys.Num6
+	Num7       = sys.Num7
+	Num8       = sys.Num8
+	Num9       = sys.Num9
 )
 
 var (

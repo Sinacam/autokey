@@ -65,6 +65,17 @@ const (
 	End        = int(C.VK_END)
 	Home       = int(C.VK_HOME)
 	Delete     = int(C.VK_DELETE)
+
+	Num0 = int(C.VK_NUMPAD0)
+	Num1 = int(C.VK_NUMPAD1)
+	Num2 = int(C.VK_NUMPAD2)
+	Num3 = int(C.VK_NUMPAD3)
+	Num4 = int(C.VK_NUMPAD4)
+	Num5 = int(C.VK_NUMPAD5)
+	Num6 = int(C.VK_NUMPAD6)
+	Num7 = int(C.VK_NUMPAD7)
+	Num8 = int(C.VK_NUMPAD8)
+	Num9 = int(C.VK_NUMPAD9)
 )
 
 var (
