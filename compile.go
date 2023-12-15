@@ -196,7 +196,7 @@ func parseInput(val interface{}, defaultFlag uint64) ([]Input, error) {
 	switch val := val.(type) {
 	case int:
 		return []Input{
-			{Key: val + '0'},
+			{Key: val + '0', Flag: defaultFlag},
 		}, nil
 	case string:
 		val = strings.ToLower(val)
